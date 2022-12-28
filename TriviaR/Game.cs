@@ -54,7 +54,7 @@ class Game
 
             await _hubContext.Groups.AddToGroupAsync(connectionId, Name);
 
-            await Group.WriteMessage($"A new player joined hame {Name}");
+            await Group.WriteMessage($"A new player joined game {Name}");
 
             var waitingForPlayers = true;
 
