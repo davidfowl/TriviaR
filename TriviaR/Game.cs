@@ -259,9 +259,9 @@ class Game
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "The processing for game {Name} failed unexpctedly", Name);
+            _logger.LogError(ex, "The processing for game {Name} failed unexpectedly", Name);
 
-            await Group.WriteMessage($"The processing for game {Name} failed unexpctedly: {ex}");
+            await Group.WriteMessage($"The processing for game {Name} failed unexpectedly: {ex}");
         }
         finally
         {
