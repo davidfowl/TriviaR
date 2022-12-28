@@ -1,5 +1,6 @@
 ﻿using TriviaR;
 
+// Ideally this would implement IGamePlayer, but there's an issue with cancellation tokens
 class GamePlayer
 {
     private readonly AsyncConsole _input;
@@ -9,16 +10,16 @@ class GamePlayer
         _input = new AsyncConsole();
     }
 
-    public void GameStarted(string name)
+    public void GameStarted(string game)
     {
         // Console.Beep();
         Console.Clear();
-        Console.WriteLine($"Game {name} has started.");
+        Console.WriteLine($"Game {game} has started.");
     }
-    public void GameCompleted(string name, int correct, int incorrect)
+    public void GameCompleted(string game, int correct, int incorrect)
     {
         Console.Clear();
-        Console.WriteLine($"Game {name} has completed.");
+        Console.WriteLine($"Game {game} has completed.");
 
         Console.WriteLine($"You scored {correct}/{incorrect + correct}!");
     }
@@ -65,4 +66,14 @@ class GamePlayer
     }
 
     public void WriteMessage(string message) => Console.WriteLine(message);
+
+    public void PlayerJoinedGame(string game)
+    {
+        Console.WriteLine($"A player joined {game}");
+    }
+
+    public void PlayerLeftGame(string game)
+    {
+        Console.WriteLine($"A player left {game}");
+    }
 }

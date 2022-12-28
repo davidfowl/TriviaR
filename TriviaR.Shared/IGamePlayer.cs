@@ -6,6 +6,6 @@ public interface IGamePlayer
 
     Task WriteMessage(string message);
 
-    Task GameStarted(string name);
-    Task GameCompleted(string name, int correct, int incorrect);
+    Task GameStarted(string game);
+    Task GameCompleted(string game, int correct, int incorrect);
 }
