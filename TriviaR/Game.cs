@@ -70,7 +70,7 @@ class Game
                     waitingForPlayers = false;
 
                     // We're clear, start the game
-                    _ = PlayGame();
+                    _ = Task.Run(PlayGame);
                 }
 
                 // More players can join, let's wait
