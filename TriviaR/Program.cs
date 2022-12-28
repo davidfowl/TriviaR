@@ -6,6 +6,10 @@ builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<GameFactory>();
 
+// This needs to be transient as the GameFactory manages the lifetime
+// of Game
+builder.Services.AddTransient<Game>();
+
 // We only have a single client so we'll use the empty name
 builder.Services.AddHttpClient(string.Empty, client =>
 {

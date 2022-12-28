@@ -1,16 +1,13 @@
 ﻿namespace TriviaR;
 
 using System.Collections.Concurrent;
-using Microsoft.AspNetCore.SignalR;
 
 /// <summary>
 /// The game factory keeps track of games waiting to be started, running and completed games.
 /// </summary>
 class GameFactory
 {
-    private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILoggerFactory _loggerFactory;
+    private readonly IServiceProvider _serviceProvider;
 
     // FIFO queue of games waiting to be played.
     private readonly ConcurrentQueue<Game> _waitingGames = new();
@@ -18,13 +15,9 @@ class GameFactory
     // The set of active or completed games.
     private readonly ConcurrentDictionary<string, Game> _activeGames = new();
 
-    public GameFactory(IHubContext<GameHub, IGamePlayer> hubContext,
-                       IHttpClientFactory httpClientFactory,
-                       ILoggerFactory loggerFactory)
+    public GameFactory(IServiceProvider serviceProvider)
     {
-        _hubContext = hubContext;
-        _httpClientFactory = httpClientFactory;
-        _loggerFactory = loggerFactory;
+        _serviceProvider = serviceProvider;
     }
 
     public async Task<Game> AddPlayerToGameAsync(string connectionId)
@@ -49,11 +42,11 @@ class GameFactory
                 return game;
             }
 
-            // Generate a new name and add a new game to the queue
-            var name = RandomNameGenerator.GenerateRandomName();
-            var logger = _loggerFactory.CreateLogger(name);
+            // This works because games are transient so a new one gets created
+            // when it is requested
+            var newGame = _serviceProvider.GetRequiredService<Game>();
 
-            _waitingGames.Enqueue(new Game(_hubContext, _httpClientFactory, logger, name));
+            _waitingGames.Enqueue(newGame);
         }
     }
 }

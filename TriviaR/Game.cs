@@ -22,13 +22,12 @@ class Game
 
     public Game(IHubContext<GameHub, IGamePlayer> hubContext,
                 IHttpClientFactory httpClientFactory,
-                ILogger logger,
-                string name)
+                ILogger<Game> logger)
     {
         _hubContext = hubContext;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
-        Name = name;
+        Name = RandomNameGenerator.GenerateRandomName();
         Group = hubContext.Clients.Group(Name);
 
         // Fill the slots for this game
