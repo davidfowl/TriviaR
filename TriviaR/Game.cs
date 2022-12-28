@@ -16,6 +16,7 @@ class Game
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
+    private readonly CancellationTokenSource _completedCts = new();
 
     // Number of open player slots in this game
     private readonly Channel<int> _playerSlots = Channel.CreateBounded<int>(MaxPlayersPerGame);
@@ -41,7 +42,7 @@ class Game
 
     private IGamePlayer Group { get; }
 
-    public bool Completed { get; private set; }
+    public CancellationToken Completed => _completedCts.Token;
 
     public async Task<bool> AddPlayerAsync(string connectionId)
     {
@@ -266,7 +267,8 @@ class Game
         {
             _logger.LogInformation("The game {Name} has run to completion.", Name);
 
-            Completed = true;
+            // Signal that we're done
+            _completedCts.Cancel();
 
             questionCts?.Dispose();
         }

@@ -15,12 +15,9 @@ class GameFactory
     // The set of active or completed games.
     private readonly ConcurrentDictionary<string, Game> _activeGames = new();
 
-    private readonly PeriodicTimer _timer = new(TimeSpan.FromSeconds(10));
-
     public GameFactory(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        Task.Run(CheckForExpiredGames);
     }
 
     public async Task<Game> AddPlayerToGameAsync(string connectionId)
@@ -36,6 +33,13 @@ class GameFactory
                     // We're unable to use this waiting game, so make it an active game.
                     if (_activeGames.TryAdd(game.Name, game))
                     {
+                        // Remove the game when it completes
+                        game.Completed.UnsafeRegister(_ =>
+                        {
+                            _activeGames.TryRemove(game.Name, out var _);
+                        }, 
+                        null);
+
                         // Remove it from the list of waiting games after we've made it active
                         _waitingGames.TryDequeue(out _);
                     }
@@ -50,21 +54,6 @@ class GameFactory
             var newGame = _serviceProvider.GetRequiredService<Game>();
 
             _waitingGames.Enqueue(newGame);
-        }
-    }
-
-    private async Task CheckForExpiredGames()
-    {
-        while (await _timer.WaitForNextTickAsync())
-        {
-            // Remove completed games
-            foreach (var (key, g) in _activeGames)
-            {
-                if (g.Completed)
-                {
-                    _activeGames.TryRemove(key, out _);
-                }
-            }
         }
     }
 }
