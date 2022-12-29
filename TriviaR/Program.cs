@@ -18,6 +18,16 @@ builder.Services.AddHttpClient(string.Empty, client =>
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
+}
+
+app.UseFileServer();
+app.UseBlazorFrameworkFiles();
+
+app.UseRouting();
+
 app.MapHub<GameHub>("/trivia");
 
 app.Run();

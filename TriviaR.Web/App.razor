@@ -1,0 +1,120 @@
+﻿@inject NavigationManager NavigationManager
+
+<h1>TriviaR@(gameName is not null ? $" - {gameName}" : "")</h1>
+
+@if (currentQuestion is not null)
+{
+    <div id="question">
+        <span style="padding:5px">@currentQuestion.Question</span>
+
+        <ol>
+        @for (int i = 0; i < currentQuestion.Choices.Length; i++)
+        {
+            var choiceIndex = i;
+            var choice = currentQuestion.Choices[i];
+            <li style="padding:5px;">
+                <button disabled="@currentAnswer" @onclick="(() => OnSubmit(choiceIndex))">@choice</button>
+            </li>
+        }
+        </ol>
+    </div>
+}
+
+<ul>
+    @foreach (var message in messages)
+    {
+        <li>@message</li>
+    }
+</ul>
+
+@code
+{
+    List<string> messages = new();
+
+    string? gameName;
+
+    // The current question
+    GameQuestion? currentQuestion;
+
+    bool currentAnswer;
+
+    // Treat the channel like a reusable promise
+    Channel<GameAnswer> answers = Channel.CreateUnbounded<GameAnswer>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var connection = new HubConnectionBuilder()
+                        .WithUrl(NavigationManager.ToAbsoluteUri("/trivia"))
+                        .Build();
+
+        connection.On<string>(nameof(WriteMessage), WriteMessage);
+        connection.On<GameQuestion, int, GameAnswer>(nameof(AskQuestion), AskQuestion);
+        connection.On<string>(nameof(GameStarted), GameStarted);
+        connection.On<string, int, int>(nameof(GameCompleted), GameCompleted);
+
+        connection.Closed += (ex) =>
+        {
+            WriteMessage("Connection closed.");
+
+            return Task.CompletedTask;
+        };
+
+        await connection.StartAsync();
+    }
+
+    void OnSubmit(int choice)
+    {
+        currentAnswer = true;
+        answers.Writer.TryWrite(new GameAnswer { Choice = choice });
+    }
+
+    void WriteMessage(string message)
+    {
+        messages.Add(message);
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    void GameStarted(string game)
+    {
+        gameName = game;
+
+        messages.Clear();
+        WriteMessage($"Game {game} started.");
+    }
+
+    void GameCompleted(string game, int correct, int incorrect)
+    {
+        currentAnswer = false;
+        currentQuestion = null;
+
+        messages.Clear();
+        WriteMessage($"Game {game} is completed. Your score is {correct}/{correct + incorrect}");
+    }
+
+    async Task<GameAnswer> AskQuestion(GameQuestion question, int timeoutInSeconds)
+    {
+        currentAnswer = false;
+
+        messages.Clear();
+
+        currentQuestion = question;
+
+        await InvokeAsync(StateHasChanged);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutInSeconds));
+
+        try
+        {
+            return await answers.Reader.ReadAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            currentAnswer = true;
+
+            WriteMessage("Times up!");
+
+            throw;
+        }
+    }
+}
