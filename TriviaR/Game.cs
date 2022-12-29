@@ -142,12 +142,12 @@ class Game
             var triviaQuestions = await triviaApi.GetQuestionsAsync(QuestionsPerGame);
 
             var playerAnswers = new List<Task<(string, GameAnswer)>>(MaxPlayersPerGame);
-            var allPlayerAnswers = new Dictionary<string, bool[]>();
+            var allPlayerAnswers = new Dictionary<string, (int, int)>();
 
             // Stores if the player was right for a specific round
             foreach (var (id, _) in _players)
             {
-                allPlayerAnswers[id] = new bool[triviaQuestions.Length];
+                allPlayerAnswers[id] = (0, 0);
             }
 
             await Group.WriteMessage($"Retrieved {triviaQuestions.Length} questions...");
@@ -210,7 +210,10 @@ class Game
                 foreach (var (id, answer) in playerAnswers.Where(t => t.IsCompletedSuccessfully).Select(t => t.Result))
                 {
                     var isCorrect = answer.Choice is { } choice && choices[choice] == question.CorrectAnswer;
-                    allPlayerAnswers[id][questionId] = isCorrect;
+
+                    // Increment the correct/incorrect answers for this player
+                    var (correct, incorrect) = allPlayerAnswers[id];
+                    allPlayerAnswers[id] = (isCorrect ? correct + 1 : correct, isCorrect ? incorrect : incorrect + 1);
 
                     // The player might have left so, check if they are still around
                     if (_players.TryGetValue(id, out var player))
@@ -250,8 +253,7 @@ class Game
                     // The player might have left so, check if they are still around
                     if (_players.TryGetValue(id, out var player))
                     {
-                        var correct = scores.Count(b => b);
-                        var incorrect = scores.Count(b => !b);
+                        var (correct, incorrect) = scores;
                         await player.GameCompleted(Name, correct, incorrect);
                     }
                 }
