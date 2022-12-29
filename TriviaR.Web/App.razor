@@ -13,7 +13,7 @@
             var choiceIndex = i;
             var choice = currentQuestion.Choices[i];
             <li style="padding:5px;">
-                <button disabled="@currentAnswer" @onclick="(() => OnSubmit(choiceIndex))">@choice</button>
+                    <button disabled="@currentAnswer" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
             </li>
         }
         </ol>
@@ -38,7 +38,7 @@
 
     bool currentAnswer;
 
-    // Treat the channel like a reusable promise
+    // Treat the channel like a reusable TaskCompletionSource
     Channel<GameAnswer> answers = Channel.CreateUnbounded<GameAnswer>();
 
     protected override async Task OnInitializedAsync()
@@ -47,6 +47,7 @@
                         .WithUrl(NavigationManager.ToAbsoluteUri("/trivia"))
                         .Build();
 
+        // Wire up the event callbacks
         connection.On<string>(nameof(WriteMessage), WriteMessage);
         connection.On<GameQuestion, int, GameAnswer>(nameof(AskQuestion), AskQuestion);
         connection.On<string>(nameof(GameStarted), GameStarted);
@@ -62,11 +63,13 @@
         await connection.StartAsync();
     }
 
-    void OnSubmit(int choice)
+    void AnswerQuestion(int choice)
     {
         if (!currentAnswer)
         {
             currentAnswer = true;
+
+            // Respond to the currently pending client result (AskQuestion)
             answers.Writer.TryWrite(new GameAnswer { Choice = choice });
         }
     }
@@ -109,10 +112,12 @@
 
         try
         {
+            // Wait for the answer to be written to the channel
             return await answers.Reader.ReadAsync(cts.Token);
         }
         catch (OperationCanceledException)
         {
+            // We timed out waiting for an answer
             currentAnswer = true;
 
             WriteMessage("Times up!");
