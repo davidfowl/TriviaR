@@ -64,8 +64,11 @@
 
     void OnSubmit(int choice)
     {
-        currentAnswer = true;
-        answers.Writer.TryWrite(new GameAnswer { Choice = choice });
+        if (!currentAnswer)
+        {
+            currentAnswer = true;
+            answers.Writer.TryWrite(new GameAnswer { Choice = choice });
+        }
     }
 
     void WriteMessage(string message)
