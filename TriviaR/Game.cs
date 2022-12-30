@@ -12,7 +12,7 @@ class Game
     private const int TimePerQuestion = 20;
     private const int QuestionsPerGame = 5;
 
-    private readonly ConcurrentDictionary<string, IGamePlayer> _players = new();
+    private readonly ConcurrentDictionary<string, PlayerState> _players = new();
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
@@ -50,7 +50,10 @@ class Game
         if (_playerSlots.Reader.TryRead(out _))
         {
             // We succeeded so set up this player
-            _players.TryAdd(connectionId, _hubContext.Clients.Client(connectionId));
+            _players.TryAdd(connectionId, new PlayerState
+            {
+                Proxy = _hubContext.Clients.Client(connectionId)
+            });
 
             await _hubContext.Groups.AddToGroupAsync(connectionId, Name);
 
@@ -104,9 +107,10 @@ class Game
     private async Task PlayGame()
     {
         // Ask the player a question until we get a valid answer
-        static async Task<(string, GameAnswer)> AskPlayerQuestion(string id,
-            IGamePlayer player, int timeoutInSeconds, GameQuestion question, CancellationToken cancellationToken)
+        static async Task<(PlayerState, GameAnswer)> AskPlayerQuestion(PlayerState playerState, int timeoutInSeconds, GameQuestion question, CancellationToken cancellationToken)
         {
+            var player = playerState.Proxy;
+
             while (true)
             {
                 // Ask the player this question and wait for the response
@@ -117,7 +121,7 @@ class Game
                 {
                     await player.WriteMessage("Answer received. Waiting for other players to answer.");
 
-                    return (id, answer);
+                    return (playerState, answer);
                 }
 
                 // REVIEW: We can tell the player the choice in invalid here
@@ -141,14 +145,7 @@ class Game
             // Get the trivia questions for this game
             var triviaQuestions = await triviaApi.GetQuestionsAsync(QuestionsPerGame);
 
-            var playerAnswers = new List<Task<(string, GameAnswer)>>(MaxPlayersPerGame);
-            var allPlayerAnswers = new Dictionary<string, (int, int)>();
-
-            // Stores if the player was right for a specific round
-            foreach (var (id, _) in _players)
-            {
-                allPlayerAnswers[id] = (0, 0);
-            }
+            var playerAnswers = new List<Task<(PlayerState, GameAnswer)>>(MaxPlayersPerGame);
 
             await Group.WriteMessage($"Retrieved {triviaQuestions.Length} questions...");
 
@@ -168,6 +165,8 @@ class Game
                 // Shuffle the choices so it's randomly placed
                 Shuffle(choices);
 
+                var indexOfCorrectAnswer = Array.IndexOf(choices, question.CorrectAnswer);
+
                 var gameQuestion = new GameQuestion
                 {
                     Question = question.Question,
@@ -184,10 +183,10 @@ class Game
 
                 emptyGame = true;
 
-                foreach (var (id, player) in _players)
+                foreach (var (_, player) in _players)
                 {
                     emptyGame = false;
-                    playerAnswers.Add(AskPlayerQuestion(id, player, TimePerQuestion, gameQuestion, questionCts.Token));
+                    playerAnswers.Add(AskPlayerQuestion(player, TimePerQuestion, gameQuestion, questionCts.Token));
                 }
 
                 if (emptyGame)
@@ -207,26 +206,20 @@ class Game
                 _logger.LogInformation("Received all answers for question {QuestionId}", questionId);
 
                 // Observe the valid responses to questions
-                foreach (var (id, answer) in playerAnswers.Where(t => t.IsCompletedSuccessfully).Select(t => t.Result))
+                foreach (var (player, answer) in playerAnswers.Where(t => t.IsCompletedSuccessfully).Select(t => t.Result))
                 {
                     var isCorrect = answer.Choice is { } choice && choices[choice] == question.CorrectAnswer;
 
                     // Increment the correct/incorrect answers for this player
-                    var (correct, incorrect) = allPlayerAnswers[id];
-                    allPlayerAnswers[id] = (isCorrect ? correct + 1 : correct, isCorrect ? incorrect : incorrect + 1);
-
-                    // The player might have left so, check if they are still around
-                    if (_players.TryGetValue(id, out var player))
+                    if (isCorrect)
                     {
-                        if (isCorrect)
-                        {
-                            await player.WriteMessage($"That answer is correct!");
-                        }
-                        else
-                        {
-                            var indexOfCorrectAnswer = Array.IndexOf(choices, question.CorrectAnswer);
-                            await player.WriteMessage($"That answer is incorrect! The correct answer is {indexOfCorrectAnswer}. {question.CorrectAnswer}.");
-                        }
+                        player.Correct++;
+                        await player.Proxy.WriteMessage($"That answer is correct!");
+                    }
+                    else
+                    {
+                        player.Incorrect++;
+                        await player.Proxy.WriteMessage($"That answer is incorrect! The correct answer is {indexOfCorrectAnswer}. {question.CorrectAnswer}.");
                     }
                 }
 
@@ -247,15 +240,10 @@ class Game
 
                 await Task.Delay(4000);
 
-                // Tally the scores
-                foreach (var (id, scores) in allPlayerAnswers)
+                // Report the scores
+                foreach (var (_, player) in _players)
                 {
-                    // The player might have left so, check if they are still around
-                    if (_players.TryGetValue(id, out var player))
-                    {
-                        var (correct, incorrect) = scores;
-                        await player.GameCompleted(Name, correct, incorrect);
-                    }
+                    await player.Proxy.GameCompleted(Name, player.Correct, player.Incorrect);
                 }
             }
         }
@@ -284,5 +272,12 @@ class Game
             int j = Random.Shared.Next(i, array.Length);
             (array[j], array[i]) = (array[i], array[j]);
         }
+    }
+
+    private sealed class PlayerState
+    {
+        public required IGamePlayer Proxy { get; init; }
+        public int Correct { get; set; }
+        public int Incorrect { get; set; }
     }
 }
