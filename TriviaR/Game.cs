@@ -165,7 +165,7 @@ class Game
                 // Shuffle the choices so it's randomly placed
                 Shuffle(choices);
 
-                var indexOfCorrectAnswer = Array.IndexOf(choices, question.CorrectAnswer);
+                var indexOfCorrectAnswer = choices.AsSpan().IndexOf(question.CorrectAnswer);
 
                 var gameQuestion = new GameQuestion
                 {
