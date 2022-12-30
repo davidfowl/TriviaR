@@ -208,18 +208,18 @@ class Game
                 // Observe the valid responses to questions
                 foreach (var (player, answer) in playerAnswers.Where(t => t.IsCompletedSuccessfully).Select(t => t.Result))
                 {
-                    var isCorrect = answer.Choice is { } choice && choices[choice] == question.CorrectAnswer;
+                    var isCorrect = answer.Choice == indexOfCorrectAnswer;
 
                     // Increment the correct/incorrect answers for this player
                     if (isCorrect)
                     {
                         player.Correct++;
-                        await player.Proxy.WriteMessage($"That answer is correct!");
+                        await player.Proxy.WriteMessage($"{question.CorrectAnswer} is correct!");
                     }
                     else
                     {
                         player.Incorrect++;
-                        await player.Proxy.WriteMessage($"That answer is incorrect! The correct answer is {indexOfCorrectAnswer}. {question.CorrectAnswer}.");
+                        await player.Proxy.WriteMessage($"That answer is incorrect! The correct answer is {question.CorrectAnswer}.");
                     }
                 }
 
