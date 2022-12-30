@@ -6,10 +6,7 @@ class GameHub : Hub<IGamePlayer>
 {
     private readonly GameFactory _gameFactory;
 
-    public GameHub(GameFactory gameFactory)
-    {
-        _gameFactory = gameFactory;
-    }
+    public GameHub(GameFactory gameFactory) => _gameFactory = gameFactory;
 
     public override async Task OnConnectedAsync()
     {
