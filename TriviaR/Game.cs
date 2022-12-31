@@ -14,6 +14,7 @@ class Game
 
     // Give the client some buffer
     private readonly TimeSpan ServerTimeout = TimeSpan.FromSeconds(TimePerQuestion + 5);
+    private readonly TimeSpan GameTransitionDelay = TimeSpan.FromSeconds(5);
 
     // Injected dependencies
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
@@ -155,7 +156,7 @@ class Game
 
             await Group.GameStarted(Name, triviaQuestions.Length);
 
-            await Task.Delay(3000);
+            await Task.Delay(GameTransitionDelay);
 
             var questionId = 0;
             foreach (var question in triviaQuestions)
@@ -221,9 +222,9 @@ class Game
                 if (questionId < QuestionsPerGame)
                 {
                     // Tell each player that we're moving to the next question
-                    await Group.WriteMessage("Moving to the next question in 5 seconds...");
+                    await Group.WriteMessage($"Moving to the next question in {GameTransitionDelay.TotalSeconds} seconds...");
 
-                    await Task.Delay(5000);
+                    await Task.Delay(GameTransitionDelay);
                 }
             }
 
@@ -231,7 +232,7 @@ class Game
             {
                 await Group.WriteMessage("Calculating scores...");
 
-                await Task.Delay(4000);
+                await Task.Delay(GameTransitionDelay);
 
                 // Report the scores
                 foreach (var (_, player) in _players)
