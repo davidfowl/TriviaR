@@ -12,10 +12,15 @@ class Game
     private const int TimePerQuestion = 20;
     private const int QuestionsPerGame = 5;
 
-    private readonly ConcurrentDictionary<string, PlayerState> _players = new();
+    // Injected dependencies
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger _logger;
+
+    // Player state keyed by connection id
+    private readonly ConcurrentDictionary<string, PlayerState> _players = new();
+
+    // Notification when the game is completed
     private readonly CancellationTokenSource _completedCts = new();
 
     // Number of open player slots in this game
@@ -128,10 +133,7 @@ class Game
             }
         }
 
-        var client = _httpClientFactory.CreateClient();
-        var triviaApi = new TriviaApi(client);
-
-        // Did everyone quit the game? Then no point asking anymore questions
+        // Did everyone rage quit the game? Then no point asking anymore questions
         // nobody can join mid-game.
         var emptyGame = false;
 
@@ -140,61 +142,49 @@ class Game
 
         try
         {
-            await Group.GameStarted(Name);
-
             // Get the trivia questions for this game
+            var client = _httpClientFactory.CreateClient();
+            var triviaApi = new TriviaApi(client);
+
             var triviaQuestions = await triviaApi.GetQuestionsAsync(QuestionsPerGame);
 
             var playerAnswers = new List<Task<(PlayerState, GameAnswer)>>(MaxPlayersPerGame);
 
-            await Group.WriteMessage($"Retrieved {triviaQuestions.Length} questions...");
+            await Group.GameStarted(Name, triviaQuestions.Length);
 
             await Task.Delay(3000);
 
             var questionId = 0;
             foreach (var question in triviaQuestions)
             {
-                // Copy the choices into an array
-                var choices = new string[question.IncorrectAnswers.Length + 1];
-                choices[^1] = question.CorrectAnswer;
-                for (int i = 0; i < question.IncorrectAnswers.Length; i++)
-                {
-                    choices[i] = question.IncorrectAnswers[i];
-                }
-
-                // Shuffle the choices so it's randomly placed
-                Shuffle(choices);
-
-                var indexOfCorrectAnswer = choices.AsSpan().IndexOf(question.CorrectAnswer);
-
-                var gameQuestion = new GameQuestion
-                {
-                    Question = question.Question,
-                    Choices = choices
-                };
+                // Prepare the question to send to the client
+                var (gameQuestion, indexOfCorrectAnswer) = CreateGameQuestion(question);
 
                 // Each question has a timeout (give the client some buffer before the server stops waiting for a reply)
                 questionCts.CancelAfter(TimeSpan.FromSeconds(TimePerQuestion + 5));
 
-                // Clear the answers from the last round
+                // Clear the answers from the previous round
                 playerAnswers.Clear();
 
                 _logger.LogInformation("Asking question {QuestionId}", questionId);
 
-                emptyGame = true;
-
+                // Ask the players the question concurrently
                 foreach (var (_, player) in _players)
                 {
-                    emptyGame = false;
                     playerAnswers.Add(AskPlayerQuestion(player, TimePerQuestion, gameQuestion, questionCts.Token));
                 }
 
+                // Detect if all players exit the game. This is an optimization so we can clean up early.
+                emptyGame = playerAnswers.Count == 0;
+
                 if (emptyGame)
                 {
+                    // Early exit if there are no players
                     break;
                 }
 
-                // We don't want to throw exceptions when answers don't come back
+                // Wait for all of the responses to come back (or timeouts).
+                // We don't want to throw exceptions when answers don't come back successfully.
                 await Task.WhenAll(playerAnswers).NoThrow();
 
                 if (!questionCts.TryReset())
@@ -236,7 +226,7 @@ class Game
 
             if (!emptyGame)
             {
-                await Group.WriteMessage("Tallying scores...");
+                await Group.WriteMessage("Calculating scores...");
 
                 await Task.Delay(4000);
 
@@ -257,21 +247,44 @@ class Game
         {
             _logger.LogInformation("The game {Name} has run to completion.", Name);
 
+            questionCts.Dispose();
+
             // Signal that we're done
             _completedCts.Cancel();
-
-            questionCts?.Dispose();
         }
     }
 
-    static void Shuffle<T>(T[] array)
+    static (GameQuestion, int) CreateGameQuestion(TriviaQuestion question)
     {
-        // In-place Fisher-Yates shuffle
-        for (int i = 0; i < array.Length - 1; ++i)
+        static void Shuffle<T>(T[] array)
         {
-            int j = Random.Shared.Next(i, array.Length);
-            (array[j], array[i]) = (array[i], array[j]);
+            // In-place Fisher-Yates shuffle
+            for (int i = 0; i < array.Length - 1; ++i)
+            {
+                int j = Random.Shared.Next(i, array.Length);
+                (array[j], array[i]) = (array[i], array[j]);
+            }
         }
+
+        // Copy the choices into an array and shuffle
+        var choices = new string[question.IncorrectAnswers.Length + 1];
+        choices[^1] = question.CorrectAnswer;
+        for (int i = 0; i < question.IncorrectAnswers.Length; i++)
+        {
+            choices[i] = question.IncorrectAnswers[i];
+        }
+
+        // Shuffle the choices so it's randomly placed
+        Shuffle(choices);
+
+        var indexOfCorrectAnswer = choices.AsSpan().IndexOf(question.CorrectAnswer);
+        var gameQuestion = new GameQuestion
+        {
+            Question = question.Question,
+            Choices = choices
+        };
+
+        return (gameQuestion, indexOfCorrectAnswer);
     }
 
     private sealed class PlayerState

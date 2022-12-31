@@ -50,7 +50,7 @@
         // Wire up the event callbacks
         connection.On<string>(nameof(WriteMessage), WriteMessage);
         connection.On<GameQuestion, int, GameAnswer>(nameof(AskQuestion), AskQuestion);
-        connection.On<string>(nameof(GameStarted), GameStarted);
+        connection.On<string, int>(nameof(GameStarted), GameStarted);
         connection.On<string, int, int>(nameof(GameCompleted), GameCompleted);
 
         connection.Closed += (ex) =>
@@ -81,12 +81,12 @@
         InvokeAsync(StateHasChanged);
     }
 
-    void GameStarted(string game)
+    void GameStarted(string game, int numberOfQuestions)
     {
         gameName = game;
 
         messages.Clear();
-        WriteMessage($"Game {game} started.");
+        WriteMessage($"Game {game} has started. Prepare to answer {numberOfQuestions} trivia questions!");
     }
 
     void GameCompleted(string game, int correct, int incorrect)

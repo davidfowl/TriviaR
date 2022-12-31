@@ -10,11 +10,11 @@ class GamePlayer
         _input = new AsyncConsole();
     }
 
-    public void GameStarted(string game)
+    public void GameStarted(string game, int numberOfQuestions)
     {
         // Console.Beep();
         Console.Clear();
-        Console.WriteLine($"Game {game} has started.");
+        Console.WriteLine($"Game {game} has started. Prepare to answer {numberOfQuestions} trivia questions!");
     }
     public void GameCompleted(string game, int correct, int incorrect)
     {
