@@ -4,30 +4,35 @@
 class GamePlayer
 {
     private readonly AsyncConsole _input;
+    private TimeSpan _timeoutPerQuestion;
+    private int _totalQuestions;
 
     public GamePlayer()
     {
         _input = new AsyncConsole();
     }
 
-    public void GameStarted(string game, int numberOfQuestions)
+    public void GameStarted(GameConfiguration gameConfiguration)
     {
+        _timeoutPerQuestion = TimeSpan.FromSeconds(gameConfiguration.QuestionTimeout);
+        _totalQuestions = gameConfiguration.NumberOfQuestions;
+
         // Console.Beep();
         Console.Clear();
-        Console.WriteLine($"Game {game} has started. Prepare to answer {numberOfQuestions} trivia questions!");
+        Console.WriteLine($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
-    public void GameCompleted(string game, int correct, int incorrect)
+    public void GameCompleted(string game, int correct)
     {
         Console.Clear();
         Console.WriteLine($"Game {game} has completed.");
 
-        Console.WriteLine($"You scored {correct}/{incorrect + correct}!");
+        Console.WriteLine($"You scored {correct}/{_totalQuestions}!");
     }
 
-    public async Task<GameAnswer> AskQuestion(GameQuestion question, int timeoutInSeconds)
+    public async Task<GameAnswer> AskQuestion(GameQuestion question)
     {
         Console.Clear();
-        Console.WriteLine($"You have {timeoutInSeconds} seconds to answer this question.");
+        Console.WriteLine($"You have {_timeoutPerQuestion.TotalSeconds} seconds to answer this question.");
         Console.WriteLine(question.Question);
 
         var index = 0;
@@ -37,7 +42,7 @@ class GamePlayer
             index++;
         }
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutInSeconds));
+        using var cts = new CancellationTokenSource(_timeoutPerQuestion);
 
         Console.WriteLine();
         Console.Write("Answer: ");

@@ -116,14 +116,14 @@ class Game
     private async Task PlayGame()
     {
         // Ask the player a question until we get a valid answer
-        static async Task<(PlayerState, GameAnswer)> AskPlayerQuestion(PlayerState playerState, int timeoutInSeconds, GameQuestion question, CancellationToken cancellationToken)
+        static async Task<(PlayerState, GameAnswer)> AskPlayerQuestion(PlayerState playerState, GameQuestion question, CancellationToken cancellationToken)
         {
             var player = playerState.Proxy;
 
             while (true)
             {
                 // Ask the player this question and wait for the response
-                var answer = await player.AskQuestion(question, timeoutInSeconds, cancellationToken);
+                var answer = await player.AskQuestion(question, cancellationToken);
 
                 // If it's a valid choice, the return the answer
                 if (answer.Choice >= 0 && answer.Choice < question.Choices.Length)
@@ -154,7 +154,14 @@ class Game
 
             var playerAnswers = new List<Task<(PlayerState, GameAnswer)>>(MaxPlayersPerGame);
 
-            await Group.GameStarted(Name, triviaQuestions.Length);
+            var configuration = new GameConfiguration
+            {
+                Name = Name,
+                NumberOfQuestions = triviaQuestions.Length,
+                QuestionTimeout = TimePerQuestion
+            };
+
+            await Group.GameStarted(configuration);
 
             await Task.Delay(GameTransitionDelay);
 
@@ -175,7 +182,7 @@ class Game
                 // Ask the players the question concurrently
                 foreach (var (_, player) in _players)
                 {
-                    playerAnswers.Add(AskPlayerQuestion(player, TimePerQuestion, gameQuestion, questionTimoutTokenSource.Token));
+                    playerAnswers.Add(AskPlayerQuestion(player, gameQuestion, questionTimoutTokenSource.Token));
                 }
 
                 // Detect if all players exit the game. This is an optimization so we can clean up early.
@@ -212,7 +219,6 @@ class Game
                     }
                     else
                     {
-                        player.Incorrect++;
                         await player.Proxy.WriteMessage($"That answer is incorrect! The correct answer is {question.CorrectAnswer}.");
                     }
                 }
@@ -237,7 +243,7 @@ class Game
                 // Report the scores
                 foreach (var (_, player) in _players)
                 {
-                    await player.Proxy.GameCompleted(Name, player.Correct, player.Incorrect);
+                    await player.Proxy.GameCompleted(Name, player.Correct);
                 }
             }
         }
@@ -295,6 +301,5 @@ class Game
     {
         public required IGamePlayer Proxy { get; init; }
         public int Correct { get; set; }
-        public int Incorrect { get; set; }
     }
 }

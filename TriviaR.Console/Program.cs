@@ -11,9 +11,9 @@ var connection = new HubConnectionBuilder()
 var player = new GamePlayer();
 
 connection.On<string>(nameof(GamePlayer.WriteMessage), player.WriteMessage);
-connection.On<GameQuestion, int, GameAnswer>(nameof(GamePlayer.AskQuestion), player.AskQuestion);
-connection.On<string, int>(nameof(GamePlayer.GameStarted), player.GameStarted);
-connection.On<string, int, int>(nameof(GamePlayer.GameCompleted), player.GameCompleted);
+connection.On<GameQuestion, GameAnswer>(nameof(GamePlayer.AskQuestion), player.AskQuestion);
+connection.On<GameConfiguration>(nameof(GamePlayer.GameStarted), player.GameStarted);
+connection.On<string, int>(nameof(GamePlayer.GameCompleted), player.GameCompleted);
 
 var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 

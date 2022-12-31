@@ -13,7 +13,7 @@
             var choiceIndex = i;
             var choice = currentQuestion.Choices[i];
             <li style="padding:5px;">
-                    <button disabled="@currentAnswer" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
+                <button disabled="@currentAnswer" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
             </li>
         }
         </ol>
@@ -41,6 +41,9 @@
     // Treat the channel like a reusable TaskCompletionSource
     Channel<GameAnswer> answers = Channel.CreateUnbounded<GameAnswer>();
 
+    TimeSpan timeoutPerQuestion;
+    int totalQuestions;
+
     protected override async Task OnInitializedAsync()
     {
         var connection = new HubConnectionBuilder()
@@ -49,9 +52,9 @@
 
         // Wire up the event callbacks
         connection.On<string>(nameof(WriteMessage), WriteMessage);
-        connection.On<GameQuestion, int, GameAnswer>(nameof(AskQuestion), AskQuestion);
-        connection.On<string, int>(nameof(GameStarted), GameStarted);
-        connection.On<string, int, int>(nameof(GameCompleted), GameCompleted);
+        connection.On<GameQuestion, GameAnswer>(nameof(AskQuestion), AskQuestion);
+        connection.On<GameConfiguration>(nameof(GameStarted), GameStarted);
+        connection.On<string, int>(nameof(GameCompleted), GameCompleted);
 
         connection.Closed += (ex) =>
         {
@@ -81,24 +84,26 @@
         InvokeAsync(StateHasChanged);
     }
 
-    void GameStarted(string game, int numberOfQuestions)
+    void GameStarted(GameConfiguration gameConfiguration)
     {
-        gameName = game;
+        gameName = gameConfiguration.Name;
+        totalQuestions = gameConfiguration.NumberOfQuestions;
+        timeoutPerQuestion = TimeSpan.FromSeconds(gameConfiguration.QuestionTimeout);
 
         messages.Clear();
-        WriteMessage($"Game {game} has started. Prepare to answer {numberOfQuestions} trivia questions!");
+        WriteMessage($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
 
-    void GameCompleted(string game, int correct, int incorrect)
+    void GameCompleted(string game, int correct)
     {
         currentAnswer = false;
         currentQuestion = null;
 
         messages.Clear();
-        WriteMessage($"Game {game} is completed. Your score is {correct}/{correct + incorrect}");
+        WriteMessage($"Game {game} is completed. Your score is {correct}/{totalQuestions}");
     }
 
-    async Task<GameAnswer> AskQuestion(GameQuestion question, int timeoutInSeconds)
+    async Task<GameAnswer> AskQuestion(GameQuestion question)
     {
         currentAnswer = false;
 
@@ -108,7 +113,7 @@
 
         await InvokeAsync(StateHasChanged);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutInSeconds));
+        using var cts = new CancellationTokenSource(timeoutPerQuestion);
 
         try
         {

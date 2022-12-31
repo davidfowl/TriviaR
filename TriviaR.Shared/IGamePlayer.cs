@@ -2,8 +2,8 @@
 
 public interface IGamePlayer
 {
-    Task<GameAnswer> AskQuestion(GameQuestion question, int timeoutInSeconds, CancellationToken cancellationToken);
+    Task<GameAnswer> AskQuestion(GameQuestion question, CancellationToken cancellationToken);
     Task WriteMessage(string message);
-    Task GameStarted(string game, int numberOfQuestions);
-    Task GameCompleted(string game, int correct, int incorrect);
+    Task GameStarted(GameConfiguration gameConfiguration);
+    Task GameCompleted(string game, int correct);
 }

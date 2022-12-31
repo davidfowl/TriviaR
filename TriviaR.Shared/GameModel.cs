@@ -10,3 +10,11 @@ public class GameQuestion
     public required string Question { get; set; }
     public required string[] Choices { get; set; }
 }
+
+public class GameConfiguration
+{
+    public required string Name { get; init; }
+    public required int NumberOfQuestions { get; init; }
+
+    public required int QuestionTimeout { get; init; }
+}
