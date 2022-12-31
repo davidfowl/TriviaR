@@ -6,6 +6,10 @@ builder.Services.AddSignalR();
 
 builder.Services.AddSingleton<GameFactory>();
 
+// Bind the games options from configuration
+builder.Services.AddOptions<GameOptions>()
+                .BindConfiguration("Trivia");
+
 // This needs to be transient as the GameFactory manages the lifetime
 // of Game
 builder.Services.AddTransient<Game>();

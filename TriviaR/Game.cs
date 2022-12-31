@@ -4,17 +4,14 @@ using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 
 class Game
 {
-    // TODO: Make this configuration based
-    private const int MaxPlayersPerGame = 4;
-    private const int TimePerQuestion = 20;
-    private const int QuestionsPerGame = 5;
+    private readonly GameOptions _options;
 
-    // Give the client some buffer
-    private readonly TimeSpan ServerTimeout = TimeSpan.FromSeconds(TimePerQuestion + 5);
-    private readonly TimeSpan GameTransitionDelay = TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _serverTimeout;
+    private readonly TimeSpan _gameTransitionDelay = TimeSpan.FromSeconds(5);
 
     // Injected dependencies
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
@@ -28,20 +25,27 @@ class Game
     private readonly CancellationTokenSource _completedCts = new();
 
     // Number of open player slots in this game
-    private readonly Channel<int> _playerSlots = Channel.CreateBounded<int>(MaxPlayersPerGame);
+    private readonly Channel<int> _playerSlots;
 
     public Game(IHubContext<GameHub, IGamePlayer> hubContext,
                 IHttpClientFactory httpClientFactory,
-                ILogger<Game> logger)
+                ILogger<Game> logger,
+                IOptionsMonitor<GameOptions> options)
     {
         _hubContext = hubContext;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _options = options.CurrentValue;
+        _playerSlots = Channel.CreateBounded<int>(_options.MaxPlayersPerGame);
+
         Name = RandomNameGenerator.GenerateRandomName();
         Group = hubContext.Clients.Group(Name);
 
+        // Give the client some buffer
+        _serverTimeout = TimeSpan.FromSeconds(_options.TimePerQuestion + 5);
+
         // Fill the slots for this game
-        for (int i = 0; i < MaxPlayersPerGame; i++)
+        for (int i = 0; i < _options.MaxPlayersPerGame; i++)
         {
             _playerSlots.Writer.TryWrite(0);
         }
@@ -145,6 +149,10 @@ class Game
             }
         }
 
+        var questionsPerGame = _options.QuestionsPerGame;
+        var maxPlayersPerGame = _options.MaxPlayersPerGame;
+        var timePerQuestion = _options.TimePerQuestion;
+
         // Did everyone rage quit the game? Then no point asking anymore questions
         // nobody can join mid-game.
         var emptyGame = false;
@@ -158,20 +166,20 @@ class Game
             var client = _httpClientFactory.CreateClient();
             var triviaApi = new TriviaApi(client);
 
-            var triviaQuestions = await triviaApi.GetQuestionsAsync(QuestionsPerGame);
+            var triviaQuestions = await triviaApi.GetQuestionsAsync(questionsPerGame);
 
-            var playerAnswers = new List<Task<(PlayerState, GameAnswer?)>>(MaxPlayersPerGame);
+            var playerAnswers = new List<Task<(PlayerState, GameAnswer?)>>(maxPlayersPerGame);
 
             var configuration = new GameConfiguration
             {
                 Name = Name,
                 NumberOfQuestions = triviaQuestions.Length,
-                QuestionTimeout = TimePerQuestion
+                QuestionTimeout = timePerQuestion
             };
 
             await Group.GameStarted(configuration);
 
-            await Task.Delay(GameTransitionDelay);
+            await Task.Delay(_gameTransitionDelay);
 
             var questionId = 0;
             foreach (var question in triviaQuestions)
@@ -180,7 +188,7 @@ class Game
                 var (gameQuestion, indexOfCorrectAnswer) = CreateGameQuestion(question);
 
                 // Each question has a timeout (give the client some buffer before the server stops waiting for a reply)
-                questionTimoutTokenSource.CancelAfter(ServerTimeout);
+                questionTimoutTokenSource.CancelAfter(_serverTimeout);
 
                 // Clear the answers from the previous round
                 playerAnswers.Clear();
@@ -234,12 +242,12 @@ class Game
 
                 questionId++;
 
-                if (questionId < QuestionsPerGame)
+                if (questionId < questionsPerGame)
                 {
                     // Tell each player that we're moving to the next question
-                    await Group.WriteMessage($"Moving to the next question in {GameTransitionDelay.TotalSeconds} seconds...");
+                    await Group.WriteMessage($"Moving to the next question in {_gameTransitionDelay.TotalSeconds} seconds...");
 
-                    await Task.Delay(GameTransitionDelay);
+                    await Task.Delay(_gameTransitionDelay);
                 }
             }
 
@@ -247,7 +255,7 @@ class Game
             {
                 await Group.WriteMessage("Calculating scores...");
 
-                await Task.Delay(GameTransitionDelay);
+                await Task.Delay(_gameTransitionDelay);
 
                 // Report the scores
                 foreach (var (_, player) in _players)
