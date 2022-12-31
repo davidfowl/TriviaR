@@ -18,3 +18,9 @@ public class GameConfiguration
 
     public required int QuestionTimeout { get; init; }
 }
+
+public class GameCompletedEvent
+{
+    public required string Name { get; init; }
+    public required int Correct { get; init; }
+}

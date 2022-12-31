@@ -260,7 +260,11 @@ class Game
                 // Report the scores
                 foreach (var (_, player) in _players)
                 {
-                    await player.Proxy.GameCompleted(Name, player.Correct);
+                    await player.Proxy.GameCompleted(new GameCompletedEvent
+                    {
+                        Name = Name,
+                        Correct = player.Correct
+                    });
                 }
             }
         }

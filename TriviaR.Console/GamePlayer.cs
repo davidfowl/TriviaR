@@ -21,12 +21,12 @@ class GamePlayer
         Console.Clear();
         Console.WriteLine($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
-    public void GameCompleted(string game, int correct)
+    public void GameCompleted(GameCompletedEvent @event)
     {
         Console.Clear();
-        Console.WriteLine($"Game {game} has completed.");
+        Console.WriteLine($"Game {@event.Name} has completed.");
 
-        Console.WriteLine($"You scored {correct}/{_totalQuestions}!");
+        Console.WriteLine($"You scored {@event.Correct}/{_totalQuestions}!");
     }
 
     public async Task<GameAnswer> AskQuestion(GameQuestion question)

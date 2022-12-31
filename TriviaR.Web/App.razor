@@ -54,7 +54,7 @@
         connection.On<string>(nameof(WriteMessage), WriteMessage);
         connection.On<GameQuestion, GameAnswer>(nameof(AskQuestion), AskQuestion);
         connection.On<GameConfiguration>(nameof(GameStarted), GameStarted);
-        connection.On<string, int>(nameof(GameCompleted), GameCompleted);
+        connection.On<GameCompletedEvent>(nameof(GameCompleted), GameCompleted);
 
         connection.Closed += (ex) =>
         {
@@ -94,13 +94,13 @@
         WriteMessage($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
 
-    void GameCompleted(string game, int correct)
+    void GameCompleted(GameCompletedEvent @event)
     {
         currentAnswer = false;
         currentQuestion = null;
 
         messages.Clear();
-        WriteMessage($"Game {game} is completed. Your score is {correct}/{totalQuestions}");
+        WriteMessage($"Game {@event.Name} is completed. Your score is {@event.Correct}/{totalQuestions}");
     }
 
     async Task<GameAnswer> AskQuestion(GameQuestion question)

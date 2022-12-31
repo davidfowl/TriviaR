@@ -5,5 +5,5 @@ public interface IGamePlayer
     Task<GameAnswer> AskQuestion(GameQuestion question, CancellationToken cancellationToken);
     Task WriteMessage(string message);
     Task GameStarted(GameConfiguration gameConfiguration);
-    Task GameCompleted(string game, int correct);
+    Task GameCompleted(GameCompletedEvent @event);
 }
