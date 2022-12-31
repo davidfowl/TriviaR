@@ -116,24 +116,32 @@ class Game
     private async Task PlayGame()
     {
         // Ask the player a question until we get a valid answer
-        static async Task<(PlayerState, GameAnswer)> AskPlayerQuestion(PlayerState playerState, GameQuestion question, CancellationToken cancellationToken)
+        static async Task<(PlayerState, GameAnswer?)> AskPlayerQuestion(PlayerState playerState, GameQuestion question, CancellationToken cancellationToken)
         {
-            var player = playerState.Proxy;
-
-            while (true)
+            try
             {
-                // Ask the player this question and wait for the response
-                var answer = await player.AskQuestion(question, cancellationToken);
+                var player = playerState.Proxy;
 
-                // If it's a valid choice, the return the answer
-                if (answer.Choice >= 0 && answer.Choice < question.Choices.Length)
+                while (true)
                 {
-                    await player.WriteMessage("Answer received. Waiting for other players to answer.");
+                    // Ask the player this question and wait for the response
+                    var answer = await player.AskQuestion(question, cancellationToken);
 
-                    return (playerState, answer);
+                    // If it's a valid choice, the return the answer
+                    if (answer.Choice >= 0 && answer.Choice < question.Choices.Length)
+                    {
+                        await player.WriteMessage("Answer received. Waiting for other players to answer.");
+
+                        return (playerState, answer);
+                    }
+
+                    // REVIEW: We can tell the player the choice in invalid here
                 }
-
-                // REVIEW: We can tell the player the choice in invalid here
+            }
+            catch
+            {
+                // We don't want to throw exceptions when answers don't come back successfully.
+                return (playerState, null);
             }
         }
 
@@ -152,7 +160,7 @@ class Game
 
             var triviaQuestions = await triviaApi.GetQuestionsAsync(QuestionsPerGame);
 
-            var playerAnswers = new List<Task<(PlayerState, GameAnswer)>>(MaxPlayersPerGame);
+            var playerAnswers = new List<Task<(PlayerState, GameAnswer?)>>(MaxPlayersPerGame);
 
             var configuration = new GameConfiguration
             {
@@ -195,8 +203,7 @@ class Game
                 }
 
                 // Wait for all of the responses to come back (or timeouts).
-                // We don't want to throw exceptions when answers don't come back successfully.
-                await Task.WhenAll(playerAnswers).NoThrow();
+                await Task.WhenAll(playerAnswers);
 
                 if (!questionTimoutTokenSource.TryReset())
                 {
@@ -207,19 +214,21 @@ class Game
                 _logger.LogInformation("Received all answers for question {QuestionId}", questionId);
 
                 // Observe the valid responses to questions
-                foreach (var (player, answer) in playerAnswers.Where(t => t.IsCompletedSuccessfully).Select(t => t.Result))
+                foreach (var (player, answer) in playerAnswers.Select(t => t.Result))
                 {
-                    var isCorrect = answer.Choice == indexOfCorrectAnswer;
-
-                    // Increment the correct/incorrect answers for this player
-                    if (isCorrect)
+                    // Increment the correct answers for this player
+                    if (answer?.Choice == indexOfCorrectAnswer)
                     {
                         player.Correct++;
                         await player.Proxy.WriteMessage($"{question.CorrectAnswer} is correct!");
                     }
-                    else
+                    else if (answer is not null)
                     {
                         await player.Proxy.WriteMessage($"That answer is incorrect! The correct answer is {question.CorrectAnswer}.");
+                    }
+                    else
+                    {
+                        await player.Proxy.WriteMessage($"The correct answer is {question.CorrectAnswer}.");
                     }
                 }
 
