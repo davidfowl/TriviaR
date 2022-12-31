@@ -12,6 +12,9 @@ class Game
     private const int TimePerQuestion = 20;
     private const int QuestionsPerGame = 5;
 
+    // Give the client some buffer
+    private readonly TimeSpan ServerTimeout = TimeSpan.FromSeconds(TimePerQuestion + 5);
+
     // Injected dependencies
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -138,7 +141,7 @@ class Game
         var emptyGame = false;
 
         // The per question cancellation token source
-        var questionCts = new CancellationTokenSource();
+        var questionTimoutTokenSource = new CancellationTokenSource();
 
         try
         {
@@ -161,7 +164,7 @@ class Game
                 var (gameQuestion, indexOfCorrectAnswer) = CreateGameQuestion(question);
 
                 // Each question has a timeout (give the client some buffer before the server stops waiting for a reply)
-                questionCts.CancelAfter(TimeSpan.FromSeconds(TimePerQuestion + 5));
+                questionTimoutTokenSource.CancelAfter(ServerTimeout);
 
                 // Clear the answers from the previous round
                 playerAnswers.Clear();
@@ -171,7 +174,7 @@ class Game
                 // Ask the players the question concurrently
                 foreach (var (_, player) in _players)
                 {
-                    playerAnswers.Add(AskPlayerQuestion(player, TimePerQuestion, gameQuestion, questionCts.Token));
+                    playerAnswers.Add(AskPlayerQuestion(player, TimePerQuestion, gameQuestion, questionTimoutTokenSource.Token));
                 }
 
                 // Detect if all players exit the game. This is an optimization so we can clean up early.
@@ -187,10 +190,10 @@ class Game
                 // We don't want to throw exceptions when answers don't come back successfully.
                 await Task.WhenAll(playerAnswers).NoThrow();
 
-                if (!questionCts.TryReset())
+                if (!questionTimoutTokenSource.TryReset())
                 {
                     // We were unable to reset so make a new token
-                    questionCts = new();
+                    questionTimoutTokenSource = new();
                 }
 
                 _logger.LogInformation("Received all answers for question {QuestionId}", questionId);
@@ -247,7 +250,7 @@ class Game
         {
             _logger.LogInformation("The game {Name} has run to completion.", Name);
 
-            questionCts.Dispose();
+            questionTimoutTokenSource.Dispose();
 
             // Signal that we're done
             _completedCts.Cancel();
