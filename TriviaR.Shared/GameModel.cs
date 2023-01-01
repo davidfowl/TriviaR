@@ -13,7 +13,6 @@ public class GameQuestion
 
 public class GameConfiguration
 {
-    public required string Name { get; init; }
     public required int NumberOfQuestions { get; init; }
 
     public required int QuestionTimeout { get; init; }

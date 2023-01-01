@@ -8,16 +8,20 @@
         <span style="padding:5px">@currentQuestion.Question</span>
 
         <ol>
-        @for (int i = 0; i < currentQuestion.Choices.Length; i++)
-        {
-            var choiceIndex = i;
-            var choice = currentQuestion.Choices[i];
-            <li style="padding:5px;">
-                <button disabled="@currentAnswer" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
-            </li>
-        }
+            @for (int i = 0; i < currentQuestion.Choices.Length; i++)
+            {
+                var choiceIndex = i;
+                var choice = currentQuestion.Choices[i];
+                <li style="padding:5px;">
+                    <button disabled="@(currentAnswer || Connected)" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
+                </li>
+            }
         </ol>
     </div>
+}
+else
+{
+    <button disabled="@(!CanJoinNewGame)" @onclick="JoinGame">Join new Game</button>
 }
 
 <ul>
@@ -37,6 +41,7 @@
     GameQuestion? currentQuestion;
 
     bool currentAnswer;
+    bool inGame;
 
     // Treat the channel like a reusable TaskCompletionSource
     Channel<GameAnswer> answers = Channel.CreateUnbounded<GameAnswer>();
@@ -44,10 +49,16 @@
     TimeSpan timeoutPerQuestion;
     int totalQuestions;
 
+    HubConnection _hubConnection = default!;
+
+    bool CanJoinNewGame => Connected && !inGame;
+    bool Connected => _hubConnection?.State == HubConnectionState.Connected;
+
     protected override async Task OnInitializedAsync()
     {
         var connection = new HubConnectionBuilder()
                         .WithUrl(NavigationManager.ToAbsoluteUri("/trivia"))
+                        .WithAutomaticReconnect(new RetryForeverPolicy())
                         .Build();
 
         // Wire up the event callbacks
@@ -56,14 +67,49 @@
         connection.On<GameConfiguration>(nameof(GameStarted), GameStarted);
         connection.On<GameCompletedEvent>(nameof(GameCompleted), GameCompleted);
 
-        connection.Closed += (ex) =>
+        connection.Reconnecting += (ex) =>
         {
-            WriteMessage("Connection closed.");
+            inGame = false;
+
+            WriteMessage("Connection dropped. Attempting to reconnect...");
 
             return Task.CompletedTask;
         };
 
+        connection.Closed += (ex) =>
+        {
+            inGame = false;
+
+            WriteMessage("Reconnect attempts failed. Please refresh the page to reconnect");
+
+            return Task.CompletedTask;
+        };
+
+        connection.Reconnected += (connectionId) =>
+        {
+            WriteMessage("Successfully reconnected. Join a new game.");
+
+            inGame = false;
+            currentAnswer = false;
+            currentQuestion = null;
+
+            InvokeAsync(StateHasChanged);
+
+            return Task.CompletedTask;
+        };
+
+
         await connection.StartAsync();
+
+        _hubConnection = connection;
+    }
+
+    async Task JoinGame()
+    {
+        // Join a new game
+        gameName = await _hubConnection.InvokeAsync<string>("JoinGame");
+
+        inGame = true;
     }
 
     void AnswerQuestion(int choice)
@@ -86,16 +132,16 @@
 
     void GameStarted(GameConfiguration gameConfiguration)
     {
-        gameName = gameConfiguration.Name;
         totalQuestions = gameConfiguration.NumberOfQuestions;
         timeoutPerQuestion = TimeSpan.FromSeconds(gameConfiguration.QuestionTimeout);
 
         messages.Clear();
-        WriteMessage($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
+        WriteMessage($"Game has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
 
     void GameCompleted(GameCompletedEvent @event)
     {
+        inGame = false;
         currentAnswer = false;
         currentQuestion = null;
 
@@ -125,7 +171,10 @@
             // We timed out waiting for an answer
             currentAnswer = true;
 
-            WriteMessage("Times up!");
+            if (inGame)
+            {
+                WriteMessage("Times up!");
+            }
 
             throw;
         }

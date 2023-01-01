@@ -70,7 +70,7 @@ class Game
 
             await _hubContext.Groups.AddToGroupAsync(connectionId, Name);
 
-            await Group.WriteMessage($"A new player joined game {Name}");
+            await _hubContext.Clients.GroupExcept(Name, connectionId).WriteMessage($"A new player joined game {Name}");
 
             var waitingForPlayers = true;
 
@@ -172,7 +172,6 @@ class Game
 
             var configuration = new GameConfiguration
             {
-                Name = Name,
                 NumberOfQuestions = triviaQuestions.Length,
                 QuestionTimeout = timePerQuestion
             };

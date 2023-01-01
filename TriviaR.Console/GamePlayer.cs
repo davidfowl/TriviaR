@@ -1,4 +1,5 @@
-﻿using TriviaR;
+﻿using System.Threading.Channels;
+using TriviaR;
 
 // Ideally this would implement IGamePlayer, but there's an issue with cancellation tokens
 class GamePlayer
@@ -6,10 +7,12 @@ class GamePlayer
     private readonly AsyncConsole _input;
     private TimeSpan _timeoutPerQuestion;
     private int _totalQuestions;
+    private readonly Channel<bool> _events;
 
-    public GamePlayer()
+    public GamePlayer(AsyncConsole input, Channel<bool> events)
     {
-        _input = new AsyncConsole();
+        _input = input;
+        _events = events;
     }
 
     public void GameStarted(GameConfiguration gameConfiguration)
@@ -19,7 +22,7 @@ class GamePlayer
 
         // Console.Beep();
         Console.Clear();
-        Console.WriteLine($"Game {gameConfiguration.Name} has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
+        Console.WriteLine($"Game has started. Prepare to answer {gameConfiguration.NumberOfQuestions} trivia questions!");
     }
     public void GameCompleted(GameCompletedEvent @event)
     {
@@ -27,6 +30,9 @@ class GamePlayer
         Console.WriteLine($"Game {@event.Name} has completed.");
 
         Console.WriteLine($"You scored {@event.Correct}/{_totalQuestions}!");
+
+        // Notify the main loop that the game has ended.
+        _events.Writer.TryWrite(true);
     }
 
     public async Task<GameAnswer> AskQuestion(GameQuestion question)

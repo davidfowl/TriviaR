@@ -8,10 +8,11 @@ class GameHub : Hub<IGamePlayer>
 
     public GameHub(GameFactory gameFactory) => _gameFactory = gameFactory;
 
-    public override async Task OnConnectedAsync()
+    public async Task<string> JoinGame()
     {
-        // Store this game as part of the connection state
-        Context.Items[typeof(Game)] = await _gameFactory.AddPlayerToGameAsync(Context.ConnectionId);
+        var game = await _gameFactory.AddPlayerToGameAsync(Context.ConnectionId);
+        Context.Items[typeof(Game)] = game;
+        return game.Name;
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
