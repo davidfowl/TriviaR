@@ -13,7 +13,7 @@
                 var choiceIndex = i;
                 var choice = currentQuestion.Choices[i];
                 <li style="padding:5px;">
-                    <button disabled="@(currentAnswer || Connected)" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
+                    <button disabled="@(currentAnswer || !Connected)" @onclick="(() => AnswerQuestion(choiceIndex))">@choice</button>
                 </li>
             }
         </ol>

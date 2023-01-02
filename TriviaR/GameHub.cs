@@ -10,16 +10,8 @@ class GameHub : Hub<IGamePlayer>
 
     public async Task<string> JoinGame()
     {
-        var game = await _gameFactory.AddPlayerToGameAsync(Context.ConnectionId);
-        Context.Items[typeof(Game)] = game;
-        return game.Name;
-    }
+        Game game = await _gameFactory.AddPlayerToGameAsync(Context);
 
-    public override async Task OnDisconnectedAsync(Exception? exception)
-    {
-        if (Context.Items[typeof(Game)] is Game game)
-        {
-            await game.RemovePlayerAsync(Context.ConnectionId);
-        }
+        return game.Name;
     }
 }
