@@ -8,10 +8,10 @@ using Microsoft.Extensions.Options;
 
 class Game
 {
-    private readonly GameOptions _options;
+    private static readonly TimeSpan _gameTransitionDelay = TimeSpan.FromSeconds(5);
 
+    private readonly GameOptions _options;
     private readonly TimeSpan _serverTimeout;
-    private readonly TimeSpan _gameTransitionDelay = TimeSpan.FromSeconds(5);
 
     // Injected dependencies
     private readonly IHubContext<GameHub, IGamePlayer> _hubContext;
