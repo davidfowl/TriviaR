@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.SignalR;
 /// <summary>
 /// The game factory keeps track of games waiting to be started, running and completed games.
 /// </summary>
-class GameFactory
+class Lobby
 {
     private readonly IServiceProvider _serviceProvider;
 
@@ -20,7 +20,7 @@ class GameFactory
     // The key into the per connection dictionary used to look up the current game;
     private static readonly object _gameKey = new();
 
-    public GameFactory(IServiceProvider serviceProvider)
+    public Lobby(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
     }

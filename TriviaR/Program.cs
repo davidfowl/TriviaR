@@ -4,7 +4,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSignalR();
 
-builder.Services.AddSingleton<GameFactory>();
+builder.Services.AddSingleton<Lobby>();
 
 // Bind the games options from configuration
 builder.Services.AddOptions<GameOptions>()
