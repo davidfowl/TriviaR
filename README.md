@@ -3,9 +3,9 @@
 A sample showing how to use client results in SignalR to build a turn based game.
 
 This repository has 3 projects:
-- TriviaR - The server side
-- TriviaR.Web - A Blazor WASM based client for the game
-- TriviaR.Console - A console based client for the game
+- [TriviaR](TriviaR) - The server side
+- [TriviaR.Web](TriviaR.Web) - A Blazor WASM based client for the game
+- [TriviaR.Console](TriviaR.Console) - A console based client for the game
 
 Each game requires 4 players to start, the trivia game is 5 questions and players get 20 seconds to answer each question (these values are all configurable).
 
